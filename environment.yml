@@ -1,0 +1,27 @@
+name: SampleSolution
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+
+  - pytorch
+  - torchvision
+  - torchmetrics
+  - cudatoolkit=11.3
+  - pytorch-lightning
+
+  - Cython
+  - matplotlib
+  - numpy
+  - onnx
+  - pyaml
+  - pycocotools
+  - tensorboard
+  - termcolor
+  - tqdm
+
+  - pip:
+    - onnx-simplifier
+    - opencv-contrib-python-headless
