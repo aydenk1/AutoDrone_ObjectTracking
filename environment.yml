@@ -23,5 +23,6 @@ dependencies:
   - tqdm
 
   - pip:
+    - setuptools==59.5.0
     - onnx-simplifier
     - opencv-contrib-python-headless
