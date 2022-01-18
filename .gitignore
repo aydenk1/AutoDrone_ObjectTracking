@@ -127,3 +127,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+RC_Car_12-8_PASCAL_VOC/

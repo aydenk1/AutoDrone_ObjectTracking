@@ -66,8 +66,8 @@ data:
   train:
     name: XMLDataset
     class_names: *class_names
-    img_path: /home/drone_vision/Data/RC_Car_12-8_PASCAL_VOC/images/train  #Please fill in train image path
-    ann_path: /home/drone_vision/Data/RC_Car_12-8_PASCAL_VOC/annotations/train    #Please fill in train xml path
+    img_path: ../RC_Car_12-8_PASCAL_VOC/images/train  #Please fill in train image path
+    ann_path: ../RC_Car_12-8_PASCAL_VOC/annotations/train    #Please fill in train xml path
     input_size: [640,360] #[w,h]
     #multi_scale: [0.5, 1.1]
     keep_ratio: True
@@ -86,8 +86,8 @@ data:
   val:
     name: XMLDataset
     class_names: *class_names
-    img_path: /home/drone_vision/Data/RC_Car_12-8_PASCAL_VOC/images/val  #Please fill in val image path
-    ann_path: /home/drone_vision/Data/RC_Car_12-8_PASCAL_VOC/annotations/val    #Please fill in val xml path
+    img_path: ../RC_Car_12-8_PASCAL_VOC/images/val  #Please fill in val image path
+    ann_path: ../RC_Car_12-8_PASCAL_VOC/annotations/val    #Please fill in val xml path
     input_size: [640,360]       #[w,h]
     keep_ratio: True
     pipeline:
@@ -95,7 +95,7 @@ data:
 device:
   gpu_ids: [0]
   workers_per_gpu: 8
-  batchsize_per_gpu: 30
+  batchsize_per_gpu: 15
 schedule:
 #  resume:
 #  load_model:
