@@ -20,3 +20,9 @@ The AutoDrone Object Tracking Sample Solution
     ```
     conda activate SampleSolution
     ```
+    
+4. Setup Nanodet
+    ```
+    cd nanodet
+    python setup.py develop
+    ```
