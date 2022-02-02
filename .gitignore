@@ -129,3 +129,5 @@ dmypy.json
 .pyre/
 
 RC_Car_12-8_PASCAL_VOC/
+RC_Testing_Data/
+.vscode/
