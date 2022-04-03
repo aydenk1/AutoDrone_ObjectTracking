@@ -14,9 +14,6 @@
 #include <iostream>
 #include <sstream>
 
-
-
-
 struct object_rect {
     int x;
     int y;
@@ -24,39 +21,66 @@ struct object_rect {
     int height;
 };
 
-typedef struct bbox_tlbr {
-    float x1 = -1;
-    float y1 = -1;
-    float x2 = -1;
-    float y2 = -1;
-} bbox_tlbr;
+struct bbox_tlbr {
+    float x1;
+    float y1;
+    float x2;
+    float y2;
+};
 
-typedef struct xyz{
-    float x = -1;
-    float y = -1;
-    float z = -1;
-} xyz;
+struct xyz{
+    float x;
+    float y;
+    float z;
+};
 
-vector<bbox_tlbr> get_bboxes(vector<STrack> stracks){
-    //Convert bytetrack stracks to vector of tlbr bboxex
-    vector<bbox_tlbr> bboxes_tlbr;
-    bboxes_tlbr.resize(stracks.size());
+const float conf_threshold = 0.4;
+const float nms_threshold = 0.5;
+const bbox_tlbr null_bbox = {.x1=-1.0, .y1=-1.0, .x2=-1.0, .y2=-1.0};
+const xyz null_xyz = {.x = -1.0, .y=-1.0, .z=-1.0};
+int elapsed_frames = 0; //Modified by update_bbox
+
+
+
+
+void update_bbox_cord(vector<STrack> stracks, bbox_tlbr& old_bbox, bbox_tlbr& new_bbox, xyz& old_cords, xyz& new_cords){
+    //Output last detection if within 30 frames, else output null_bbox and null_xyz
+    float max_conf = 0;
+    new_bbox = null_bbox;
+    new_cords = null_xyz;
+
+    //Output last detection if within 30 frames
+    if (stracks.size() == 0){
+        if(elapsed_frames > 30){
+            return;
+        }
+        ++elapsed_frames;
+        new_bbox = old_bbox;
+        new_cords = old_cords;
+        return;
+    }
+
+    //Find max conf bbox from detections
     for (size_t i = 0; i < stracks.size(); i++)
     {
-        bboxes_tlbr[i].x1 = stracks[i].tlbr[0];
-        bboxes_tlbr[i].y1 = stracks[i].tlbr[1];
-        bboxes_tlbr[i].x2 = stracks[i].tlbr[2];
-        bboxes_tlbr[i].y2 = stracks[i].tlbr[3];
-    }
-    return bboxes_tlbr;
-}
+        if (stracks[i].score > max_conf){
+            elapsed_frames = 0;
+            max_conf = stracks[i].score;
 
-inline void copy_points(float* src_points, float* dst_points){
-    dst_points[0] = src_points[0];
-    dst_points[1] = src_points[1];
-    dst_points[2] = src_points[2];
+            new_bbox.x1 = stracks[i].tlbr[0];
+            new_bbox.y1 = stracks[i].tlbr[1];
+            new_bbox.x2 = stracks[i].tlbr[2];
+            new_bbox.y2 = stracks[i].tlbr[3];
+
+            old_bbox = new_bbox;
+            old_cords = new_cords;
+        }
+    }
     return;
 }
+
+
+
 
 int resize_uniform(cv::Mat& src, cv::Mat& dst, cv::Size dst_size, object_rect& effect_area)
 {
@@ -115,6 +139,7 @@ int resize_uniform(cv::Mat& src, cv::Mat& dst, cv::Size dst_size, object_rect& e
     return 0;
 }
 
+
 std::vector<float> get_bboxes(const cv::Mat& bgr, const std::vector<BoxInfo>& bboxes, object_rect effect_roi)
 {
     cv::Mat image = bgr.clone();
@@ -145,6 +170,7 @@ std::vector<float> get_bboxes(const cv::Mat& bgr, const std::vector<BoxInfo>& bb
 
     return boundingboxes;
 }
+
 
 vector<Object> convert_bytetrack(const std::vector<BoxInfo>& results, const cv::Mat& image, const object_rect effect_roi){
     //Converts Nanodet bbox to ByteTrack style tlwh with score and label
@@ -177,12 +203,12 @@ int intelrealsense_inference(ros::Publisher pub_bbox, ros::Publisher pub_rel_pos
     
     auto detector = NanoDet("/home/px4vision/catkin/src/object_tracking/src/nanodet.xml", "MYRIAD", 32);
     BYTETracker tracker(10, 30);
-    
     const int height = detector.input_size[0];
     const int width = detector.input_size[1];
     const cv::Size model_in_size = cv::Size(width, height);
-    const float conf_threshold = 0.4;
-    const float nms_threshold = 0.5;
+    bbox_tlbr old_bbox, new_bbox;
+    xyz old_cords, new_cords;
+    
     ROS_INFO("Model finished loaded\n");
 
 
@@ -194,10 +220,11 @@ int intelrealsense_inference(ros::Publisher pub_bbox, ros::Publisher pub_rel_pos
     rs2::align align_to(RS2_STREAM_COLOR);
 	auto const intrinsics = pipe.get_active_profile().get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>().get_intrinsics();
 
-    // Init last_bboxes and target_cords to zero
-    int count = 0;
-    vector<bbox_tlbr> old_bboxes[1];
-	vector<xyz> old_cords[1];
+    // Init last_bboxes and target_cords to -1
+    new_bbox = null_bbox;
+    old_bbox = null_bbox;
+    new_cords = null_xyz;
+    old_cords = null_xyz;
 
     // Start streaming from Intel RealSense Camera
 	ROS_INFO("object_tracking: starting camera stream\n");
@@ -226,78 +253,68 @@ int intelrealsense_inference(ros::Publisher pub_bbox, ros::Publisher pub_rel_pos
         //std::vector<float> bboxes = get_bboxes(color_mat, results, effect_roi);
 
         //Track objects with bytetrack
-        std::vector<Object> bt_bboxes = convert_bytetrack(results, color_mat, effect_roi);
-		vector<STrack> output_stracks = tracker.update(bt_bboxes);
-        vector<bbox_tlbr> bboxes = get_bboxes(output_stracks);
+        vector<Object> bt_bboxes = convert_bytetrack(results, color_mat, effect_roi);
+	    vector<STrack> output_stracks = tracker.update(bt_bboxes);
+        
 
-        //Init xyz coords
-        vector<xyz> cords;
+        //Start output logic
+        update_bbox_cord(output_stracks, old_bbox, new_bbox, old_cords, new_cords);
 		float mean_depth = 0;
-        if(bboxes.size() == 0) {
-            bboxes = old_bboxes;
-			cords = old_cords;
-			count++;
-			if(count > 30) {
-				bboxes[0] = -1;
-				bboxes[1] = -1;
-				bboxes[2] = -1;
-				bboxes[3] = -1;
-				
-				point[0] = -1;
-				point[1] = -1;
-				point[2] = -1;
-			}
-        }
-        else {
-			Rect object((int)(bboxes[0]), (int)(bboxes[3]),
-						(int)(bboxes[2]-bboxes[0]),
-						(int)(bboxes[3]-bboxes[1]));
-			object = object & Rect(0, 0, depth_mat.cols, depth_mat.rows);
-			float pixel[2];
-			pixel[0] = bboxes[0] + (bboxes[2]-bboxes[0])/2;
-			pixel[1] = bboxes[1] + (bboxes[3]-bboxes[1])/2;
-			Scalar m = mean(depth_mat(object));
-			mean_depth = (float) m[0];
-			rs2_deproject_pixel_to_point(point, &intrinsics, pixel, (float) m[0]);
-			old_point[0] = point[0];
-			old_point[1] = point[1];
-			old_point[2] = point[2];
 
-            bboxes[0] /= color_mat.cols;
-            bboxes[1] /= color_mat.rows;
-            bboxes[2] /= color_mat.cols;
-            bboxes[3] /= color_mat.rows;
-            old_bboxes = bboxes;
-			count = 0;
+        //Get depth info
+        if(output_stracks.size() > 0){
+			Rect bbox_rect((int)(new_bbox.x1), (int)(new_bbox.y2), (int)(new_bbox.x2 - new_bbox.x1), (int)(new_bbox.y2 - new_bbox.y1));
+			bbox_rect = bbox_rect & Rect(0, 0, depth_mat.cols, depth_mat.rows);
+
+            //Find center of bbox
+			float pixel[2];
+			pixel[0] = new_bbox.x1 + (new_bbox.x2 - new_bbox.x1)/2;
+			pixel[1] = new_bbox.y1 + (new_bbox.y2 - new_bbox.y1)/2;
+			Scalar m = mean(depth_mat(bbox_rect));
+			mean_depth = (float) m[0];
+
+            //Get relative coords
+            float point[3];
+			rs2_deproject_pixel_to_point(point, &intrinsics, pixel, (float) m[0]);
+
+            //Normalize bbox cords, handle point -> xyz
+			new_cords.x = point[0];
+			new_cords.y = point[1];
+			new_cords.z = point[2];
+            old_cords = new_cords;
+            new_bbox.x1 /= color_mat.cols;
+            new_bbox.y1 /= color_mat.rows;
+            new_bbox.x2 /= color_mat.cols;
+            new_bbox.y2 /= color_mat.rows;
+            old_bbox = new_bbox;
         }
 
 		//ROS_INFO("%f, %f, %f, %f, %d, %d\n", bboxes[0], bboxes[1], bboxes[2], bboxes[3], color_mat.cols, color_mat.rows);
-		ROS_INFO("%f, %f, %f, depth: %f", point[0], point[1], point[2], mean_depth);
+		ROS_INFO("%f, %f, %f, depth: %f", new_cords.x, new_cords.y, new_cords.z, mean_depth);
         geometry_msgs::Quaternion msg;
-        msg.x = bboxes[0];
-        msg.y = bboxes[1];
-        msg.z = bboxes[2];
-        msg.w = bboxes[3];
+        msg.x = new_bbox.x1;
+        msg.y = new_bbox.y1;
+        msg.z = new_bbox.x2;
+        msg.w = new_bbox.y2;
         geometry_msgs::QuaternionStamped stamped_msg;
         stamped_msg.header = std_msgs::Header();
         stamped_msg.quaternion = msg;
         pub_bbox.publish(stamped_msg);
 
 		geometry_msgs::Quaternion msg_pos;
-        msg_pos.x = point[0];
-        msg_pos.y = point[1];
-        msg_pos.z = point[2];
+        msg_pos.x = new_cords.x;
+        msg_pos.y = new_cords.y;
+        msg_pos.z = new_cords.z;
         geometry_msgs::QuaternionStamped stamped_msg_pos;
         stamped_msg_pos.header = std_msgs::Header();
         stamped_msg_pos.quaternion = msg_pos;
         pub_rel_pos.publish(stamped_msg_pos);
 
-
-
         ros::spinOnce();
     }
     return 0;
 }
+
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "object_tracking");
