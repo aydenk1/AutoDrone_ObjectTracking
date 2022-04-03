@@ -56,19 +56,30 @@ static void generate_grid_center_priors(const int input_height, const int input_
     }
 }
 
-NanoDet::NanoDet(const char* model_path)
+
+NanoDet::NanoDet(const char* model_path, const char* device, const int precision)
 {
+    if(model_path == NULL)
+        return;
+        
     InferenceEngine::Core ie;
     InferenceEngine::CNNNetwork model = ie.ReadNetwork(model_path);
     // prepare input settings
     InferenceEngine::InputsDataMap inputs_map(model.getInputsInfo());
     input_name_ = inputs_map.begin()->first;
     InferenceEngine::InputInfo::Ptr input_info = inputs_map.begin()->second;
+    if(precision == 32) {
+        input_info->setPrecision(InferenceEngine::Precision::FP32);    
+    }
+    else if(precision == 16) {
+        input_info->setPrecision(InferenceEngine::Precision::FP16);
+    }
     //input_info->setPrecision(InferenceEngine::Precision::FP32);
     //input_info->setLayout(InferenceEngine::Layout::NCHW);
 
 
 
+    //prepare output settings
     //prepare output settings
     InferenceEngine::OutputsDataMap outputs_map(model.getOutputsInfo());
     for (auto &output_info : outputs_map)
@@ -78,7 +89,7 @@ NanoDet::NanoDet(const char* model_path)
     }
 
     //get network
-    network_ = ie.LoadNetwork(model, "CPU");
+    network_ = ie.LoadNetwork(model, device);// we added to use NCS2
     infer_request_ = network_.CreateInferRequest();
 
 }

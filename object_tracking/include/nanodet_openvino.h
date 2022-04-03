@@ -38,7 +38,7 @@ typedef struct BoxInfo
 class NanoDet
 {
 public:
-    NanoDet(const char* param);
+    NanoDet(const char* param, const char* device, const int precision);
 
     ~NanoDet();
 
